@@ -1,0 +1,332 @@
+package de.hgo.killcarl2;
+
+import com.badlogic.gdx.Gdx;
+import com.badlogic.gdx.InputProcessor;
+import com.badlogic.gdx.Screen;
+import com.badlogic.gdx.Input.Buttons;
+import com.badlogic.gdx.audio.Music;
+import com.badlogic.gdx.audio.Sound;
+import com.badlogic.gdx.graphics.GL10;
+import com.badlogic.gdx.graphics.Pixmap;
+import com.badlogic.gdx.graphics.Texture;
+import com.badlogic.gdx.graphics.g2d.Animation;
+import com.badlogic.gdx.graphics.g2d.BitmapFont;
+import com.badlogic.gdx.graphics.g2d.Sprite;
+import com.badlogic.gdx.graphics.g2d.SpriteBatch;
+import com.badlogic.gdx.graphics.g2d.TextureRegion;
+import com.badlogic.gdx.math.Rectangle;
+import com.badlogic.gdx.math.Vector2;
+import com.badlogic.gdx.utils.Timer;
+import com.badlogic.gdx.utils.Timer.Task;
+
+public class GameScreen implements Screen, InputProcessor {
+
+	private GameKillCarl2 gkc2;
+
+	// private SpriteBatch batch;
+	private Sprite bg;
+	private Pipe[] pipes;
+	public static final int HEAD_ARRAY_SIZE = 32;
+	public Head[] heads = new Head[HEAD_ARRAY_SIZE];
+	private int numberOfPipes;
+	private Music bgmusic;
+	// private BitmapFont font;
+	private String debugString = "";
+	private float difficultyFactor;
+	private float timerDelayDespawn; // in Sekunden
+	private float timerDelayRespawn; // in Sekunden
+	private int score;
+	private int rounds;
+	private Sound sound;
+	private boolean gameOver;
+	private Animation hammer;
+	private float animationTime;
+	private boolean clicked;
+	private final float HAMMER_ANIMATION_TIME = 0.085f;
+	private Vector2 lastClick = new Vector2(0, 0);
+	private Sprite blood;
+	private Rectangle[] lastHitbox;
+
+	public GameScreen(GameKillCarl2 gkc2) {
+		this.gkc2 = gkc2;
+	}
+
+	@Override
+	public void show() {
+		animationTime = 0f;
+		clicked = false;
+		blood = new Sprite(new Texture(Gdx.files.internal("data/blood.png")));
+		TextureRegion hammerUp = new TextureRegion(new Texture(
+				Gdx.files.internal("data/hammer.png")));
+		TextureRegion hammerDown = new TextureRegion(new Texture(
+				Gdx.files.internal("data/hammerDown.png")));
+		hammer = new Animation(HAMMER_ANIMATION_TIME, hammerUp, hammerDown,
+				hammerUp);
+		score = 0;
+		rounds = 1;
+		gameOver = false;
+		debugString = "x: " + String.valueOf(lastClick.x) + "y: "
+				+ String.valueOf(lastClick.y) + " true";
+		difficultyFactor = 0.982f;
+		timerDelayDespawn = 4f;
+		timerDelayRespawn = 0.2f;
+		Gdx.input.setInputProcessor(this);
+		float w = Gdx.graphics.getWidth();
+		float h = Gdx.graphics.getHeight();
+		// batch = new SpriteBatch();
+		// font = new BitmapFont();
+		bg = new Sprite(new Texture(Gdx.files.internal("data/background.jpg")));
+		pipes = new Pipe[6];
+		numberOfPipes = 8;
+		pipes = new Pipe[numberOfPipes];
+		createPipes();
+		initBgMusic();
+		sound = Gdx.audio.newSound(Gdx.files.internal("data/carl.ogg"));
+		Timer.schedule(new Task() {
+			@Override
+			public void run() {
+				tickDespawn();
+			}
+		}, timerDelayDespawn);
+
+	}
+
+	@Override
+	public void dispose() {
+		Gdx.input.setInputProcessor(null);
+		bgmusic.dispose();
+		sound.dispose();
+		for (int i = 0; i < heads.length; i++) {
+			heads[i] = null;
+		}
+		for (int i = 0; i < pipes.length; i++) {
+			pipes[i] = null;
+		}
+		Timer.instance().clear();
+	}
+
+	@Override
+	public void render(float delta) {
+		float w = Gdx.graphics.getWidth();
+		float h = Gdx.graphics.getHeight();
+		Gdx.gl.glClearColor(1, 1, 1, 1);
+		Gdx.gl.glClear(GL10.GL_COLOR_BUFFER_BIT);
+
+		gkc2.batch.begin();
+		renderBackground();
+		renderHeads();
+		renderBlood();
+		renderPipes();
+
+		if (clicked) {
+			animationTime += Gdx.graphics.getDeltaTime();
+			TextureRegion tmpFrame = hammer.getKeyFrame(animationTime, true);
+			gkc2.batch.draw(tmpFrame, lastClick.x - tmpFrame.getRegionWidth(),
+					lastClick.y - tmpFrame.getRegionHeight() / 2);
+			// gkc2.batch.draw(blood, lastHitbox.x, lastHitbox.y);
+			if (animationTime > HAMMER_ANIMATION_TIME) {
+				clicked = false;
+				animationTime = 0;
+			}
+		}
+		gkc2.font.draw(gkc2.batch, "Score: " + score, 0 + 0.05f * w, h - 0.05f
+				* h);
+		gkc2.font.draw(gkc2.batch, "Round: " + rounds, 0 + 0.05f * w, h - 0.05f
+				* h - 1 * (gkc2.font.getCapHeight() + 3));
+		if (GameKillCarl2.DEBUG) {
+			gkc2.font.draw(gkc2.batch, debugString, 0 + 0.05f * w, h - 0.05f
+					* h - 2 * (gkc2.font.getCapHeight() + 3));
+		}
+		gkc2.batch.end();
+
+	}
+	
+	private void renderBlood() {
+		if (clicked) {
+			gkc2.batch.draw(blood, lastHitbox.x, lastHitbox.y);
+		}
+	}
+
+	@Override
+	public void resize(int width, int height) {
+
+	}
+
+	@Override
+	public void pause() {
+	}
+
+	@Override
+	public void resume() {
+	}
+
+	private void createPipes() {
+		float w = Gdx.graphics.getWidth();
+		float nextPipe = 0;
+		float pipeSpace = w / numberOfPipes;
+
+		for (int i = 0; i < pipes.length; i++) {
+			if (i == 0) {
+				nextPipe = pipeSpace / 4;
+			} else {
+				nextPipe += pipeSpace / 2;
+			}
+			pipes[i] = new Pipe(new Vector2(nextPipe, 0), i, this);
+			nextPipe += pipeSpace / 2;
+		}
+	}
+
+	private void renderPipes() {
+		for (int i = 0; i < pipes.length; i++) {
+			pipes[i].render(gkc2.batch);
+		}
+	}
+
+	private void renderHeads() {
+		for (int i = 0; i < heads.length; i++) {
+			if (heads[i] != null) {
+				heads[i].render(gkc2.batch);
+			}
+		}
+	}
+
+	private void initBgMusic() {
+		bgmusic = Gdx.audio.newMusic(Gdx.files.internal("data/bgmusic.ogg"));
+		bgmusic.setLooping(true);
+		bgmusic.play();
+	}
+
+	private void renderBackground() {
+		float w = Gdx.graphics.getWidth();
+		float h = Gdx.graphics.getHeight();
+		bg.setBounds(0, 0, w, h);
+		gkc2.batch.draw(bg, bg.getX(), bg.getY());
+	}
+
+	private void tickDespawn() {
+		for (int i = 0; i < heads.length; i++) {
+			if (heads[i] != null) {
+				if (heads[i].getTyp() == Typen.CARL) {
+					gameOver("You didn't kill all Carls FAGGOT!");
+				} else {
+					heads[i] = null;
+				}
+			}
+		}
+		// new tick respawn
+		if (!gameOver) {
+			Timer.schedule(new Task() {
+				@Override
+				public void run() {
+					tickRespawn();
+				}
+			}, timerDelayRespawn);
+		}
+	}
+
+	private void tickRespawn() {
+		rounds++;
+		for (int i = 0; i < pipes.length; i++) {
+			pipes[i].spawnRandomHead();
+		}
+
+		timerDelayDespawn *= difficultyFactor;
+
+		// new tick despawn
+		Timer.schedule(new Task() {
+			@Override
+			public void run() {
+				tickDespawn();
+			}
+		}, timerDelayDespawn);
+	}
+
+	@Override
+	public boolean keyDown(int keycode) {
+		return false;
+	}
+
+	@Override
+	public boolean keyUp(int keycode) {
+		// TODO Auto-generated method stub
+		return false;
+	}
+
+	@Override
+	public boolean keyTyped(char character) {
+		// TODO Auto-generated method stub
+		return false;
+	}
+
+	@Override
+	public boolean touchDown(int screenX, int screenY, int pointer, int button) {
+		float h = Gdx.graphics.getHeight();
+		if (button == Buttons.LEFT) {
+			lastClick.set(screenX, h - screenY);
+			debugString = "x: " + String.valueOf(lastClick.x) + "y: "
+					+ String.valueOf(lastClick.y) + " false";
+			for (int i = 0; i < heads.length; i++) {
+				if (heads[i] != null
+						&& heads[i].getHitbox().contains(screenX, h - screenY)) {
+					switch (heads[i].getTyp()) {
+					case RICK:
+						gameOver("You Killed Rick STUPID!");
+						break;
+					case CARL:
+						score += 20;
+						sound.play(3.0f);
+						break;
+					case ZOMBIE:
+						score += 10;
+						break;
+					}
+					clicked = true;
+					if (heads[i] != null) {
+						lastHitbox = heads[i].getHitbox();
+					}
+					heads[i] = null;
+					debugString = "x: " + String.valueOf(lastClick.x) + "y: "
+							+ String.valueOf(lastClick.y) + " true";
+				}
+			}
+		}
+		return false;
+	}
+
+	@Override
+	public boolean touchUp(int screenX, int screenY, int pointer, int button) {
+		// TODO Auto-generated method stub
+		return false;
+	}
+
+	@Override
+	public boolean touchDragged(int screenX, int screenY, int pointer) {
+		// TODO Auto-generated method stub
+		return false;
+	}
+
+	@Override
+	public boolean mouseMoved(int screenX, int screenY) {
+		// TODO Auto-generated method stub
+		return false;
+	}
+
+	@Override
+	public boolean scrolled(int amount) {
+		// TODO Auto-generated method stub
+		return false;
+	}
+
+	@Override
+	public void hide() {
+		// TODO Auto-generated method stub
+
+	}
+
+	public void gameOver(String msg) {
+		dispose();
+		gameOver = true;
+		gkc2.setScreen(new GameOverScreen(score, msg, gkc2));
+	}
+
+}

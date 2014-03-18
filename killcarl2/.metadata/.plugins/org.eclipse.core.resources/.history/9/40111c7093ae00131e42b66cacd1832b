@@ -1,0 +1,11 @@
+package de.hgo.killcarl2;
+
+public class FlyingHershal extends Head {
+
+	public FlyingHershal(float _x, float _y, Typen _typ, int _index,
+			int originPipe, GameScreen gs) {
+		super(_x, _y, _typ, _index, originPipe, gs);
+		
+	}
+
+}

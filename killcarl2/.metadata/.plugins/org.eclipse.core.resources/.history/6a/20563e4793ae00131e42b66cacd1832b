@@ -1,0 +1,5 @@
+package de.hgo.killcarl2;
+
+public class FlyingHershal extends Head {
+
+}
