@@ -1,0 +1,21 @@
+package de.hgo.killcarl2;
+
+import com.badlogic.gdx.Gdx;
+import com.badlogic.gdx.graphics.Texture;
+import com.badlogic.gdx.graphics.Texture.TextureFilter;
+import com.badlogic.gdx.graphics.g2d.Sprite;
+import com.badlogic.gdx.math.Vector2;
+
+public class FlyingHershal extends Head {
+
+	public FlyingHershal(float _x, float _y, int _index, GameScreen gs) {
+		super(_x, _y, Typen.HERSHAL, _index, -1, gs);
+	}
+	
+	public void setPosition(Vector2 position) {
+		this.position = position;
+		hitbox.set(position.x, position.y, hitbox.width, hitbox.height);
+		sprite.rotate(degrees);
+	}
+
+}

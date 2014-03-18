@@ -1,0 +1,98 @@
+package de.hgo.killcarl2;
+
+import java.util.Random;
+import com.badlogic.gdx.Gdx;
+import com.badlogic.gdx.graphics.Color;
+import com.badlogic.gdx.graphics.Texture;
+import com.badlogic.gdx.graphics.Texture.TextureFilter;
+import com.badlogic.gdx.graphics.g2d.Sprite;
+import com.badlogic.gdx.graphics.g2d.SpriteBatch;
+import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
+import com.badlogic.gdx.graphics.glutils.ShapeRenderer.ShapeType;
+import com.badlogic.gdx.math.Rectangle;
+import com.badlogic.gdx.math.Vector2;
+
+public class Head {
+
+	protected Vector2 position;
+	protected Rectangle hitbox;
+	protected Texture texture;
+	protected Sprite sprite;
+	protected Typen typ;
+	protected int index;
+	protected int originPipe;
+	protected ShapeRenderer debugRenderer = new ShapeRenderer();
+	protected GameScreen gs;
+	
+	public Vector2 getPosition() {
+		return position;
+	}
+	
+	public void setPosition(Vector2 position) {
+		this.position = position;
+		hitbox.set(position.x, position.y, hitbox.width, hitbox.height);
+	}
+
+
+
+	public Rectangle getHitbox() {
+		return hitbox;
+	}
+
+	public int getIndex() {
+		return index;
+	}
+
+	public Sprite getSprite() {
+		return sprite;
+	}
+	
+	public void render(SpriteBatch batch){
+		batch.draw(sprite, position.x, position.y);
+		if(GameKillCarl2.DEBUG){
+			batch.end();
+			debugRenderer.setColor(new Color(1, 0, 0, 1));
+			debugRenderer.begin(ShapeType.Line);
+			debugRenderer.rect(hitbox.x, hitbox.y, hitbox.width, hitbox.height);
+			debugRenderer.end();
+			batch.begin();
+		}
+	}
+
+	public Typen getTyp() {
+		return typ;
+	}
+
+	public Head(float _x, float _y, Typen _typ, int _index, int originPipe, GameScreen gs) {
+		this.gs = gs;
+		position = new Vector2(_x, _y);
+		typ = _typ;
+		updateTexture();
+		index = _index;
+		this.originPipe = originPipe;
+		
+	}
+
+
+	private void updateTexture() {
+			switch (typ) {
+			case CARL:
+				texture = new Texture(Gdx.files.internal("data/carl.png"));
+				break;
+			case ZOMBIE:
+				texture = new Texture(Gdx.files.internal("data/zombie.png"));
+				break;
+			case RICK:
+				texture = new Texture(Gdx.files.internal("data/rick.png"));
+				break;
+			case HERSHAL:
+				texture = new Texture(Gdx.files.internal("data/rick.png"));
+				break;
+			}
+			texture.setFilter(TextureFilter.Linear, TextureFilter.Linear);
+			sprite = new Sprite(texture);
+			sprite.setPosition(position.x, position.y);
+			hitbox = sprite.getBoundingRectangle();
+	}
+
+}

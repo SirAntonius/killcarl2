@@ -1,19 +1,20 @@
 package de.hgo.killcarl2;
 
 import com.badlogic.gdx.Gdx;
+import com.badlogic.gdx.Input.Buttons;
 import com.badlogic.gdx.InputProcessor;
 import com.badlogic.gdx.Screen;
-import com.badlogic.gdx.Input.Buttons;
 import com.badlogic.gdx.audio.Music;
 import com.badlogic.gdx.audio.Sound;
+import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.graphics.GL10;
-import com.badlogic.gdx.graphics.Pixmap;
 import com.badlogic.gdx.graphics.Texture;
 import com.badlogic.gdx.graphics.g2d.Animation;
-import com.badlogic.gdx.graphics.g2d.BitmapFont;
 import com.badlogic.gdx.graphics.g2d.Sprite;
-import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 import com.badlogic.gdx.graphics.g2d.TextureRegion;
+import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
+import com.badlogic.gdx.graphics.glutils.ShapeRenderer.ShapeType;
+import com.badlogic.gdx.math.Intersector;
 import com.badlogic.gdx.math.Rectangle;
 import com.badlogic.gdx.math.Vector2;
 import com.badlogic.gdx.utils.Timer;
@@ -26,7 +27,7 @@ public class GameScreen implements Screen, InputProcessor {
 	// private SpriteBatch batch;
 	private Sprite bg;
 	private Pipe[] pipes;
-	public static final int HEAD_ARRAY_SIZE = 32;
+	public static final int HEAD_ARRAY_SIZE = 128;
 	public Head[] heads = new Head[HEAD_ARRAY_SIZE];
 	private int numberOfPipes;
 	private Music bgmusic;
@@ -44,8 +45,13 @@ public class GameScreen implements Screen, InputProcessor {
 	private boolean clicked;
 	private final float HAMMER_ANIMATION_TIME = 0.085f;
 	private Vector2 lastClick = new Vector2(0, 0);
+	private Vector2 lastDragged = new Vector2(0, 0);
 	private Sprite[] blood;
 	private Rectangle[] lastHitbox;
+	private ShapeRenderer debugRenderer = new ShapeRenderer();
+	private boolean justDragged;
+	private Vector2 tempDump1 = new Vector2(0, 0);
+	private Vector2 tempDump2 = new Vector2(0, 0);
 
 	public GameScreen(GameKillCarl2 gkc2) {
 		this.gkc2 = gkc2;
@@ -53,6 +59,7 @@ public class GameScreen implements Screen, InputProcessor {
 
 	@Override
 	public void show() {
+		justDragged = false;
 		animationTime = 0f;
 		clicked = false;
 		blood = new Sprite[HEAD_ARRAY_SIZE];
@@ -68,15 +75,14 @@ public class GameScreen implements Screen, InputProcessor {
 		debugString = "x: " + String.valueOf(lastClick.x) + "y: "
 				+ String.valueOf(lastClick.y) + " true";
 		difficultyFactor = 0.982f;
-		timerDelayDespawn = 4f;
+		timerDelayDespawn = 10f; //regular at 4f
 		timerDelayRespawn = 0.2f;
 		Gdx.input.setInputProcessor(this);
-		float w = Gdx.graphics.getWidth();
-		float h = Gdx.graphics.getHeight();
+		//float w = Gdx.graphics.getWidth();
+		//float h = Gdx.graphics.getHeight();
 		// batch = new SpriteBatch();
 		// font = new BitmapFont();
 		bg = new Sprite(new Texture(Gdx.files.internal("data/background.jpg")));
-		pipes = new Pipe[6];
 		lastHitbox = new Rectangle[HEAD_ARRAY_SIZE];
 		numberOfPipes = 8;
 		pipes = new Pipe[numberOfPipes];
@@ -137,8 +143,55 @@ public class GameScreen implements Screen, InputProcessor {
 		if (GameKillCarl2.DEBUG) {
 			gkc2.font.draw(gkc2.batch, debugString, 0 + 0.05f * w, h - 0.05f
 					* h - 2 * (gkc2.font.getCapHeight() + 3));
+			gkc2.font.draw(gkc2.batch, "lastClick", lastClick.x, lastClick.y);
+			gkc2.font.draw(gkc2.batch, "lastDragg", lastDragged.x, lastDragged.y);
+			gkc2.font.draw(gkc2.batch, "x", tempDump1.x, tempDump1.y);
+			gkc2.font.draw(gkc2.batch, "x", tempDump2.x, tempDump2.y);
 		}
 		gkc2.batch.end();
+		
+		if(GameKillCarl2.DEBUG){
+			for (int i = 0; i < heads.length; i++) {
+				if (heads[i] instanceof FlyingHershal) {
+					
+					Vector2 topLeft = new Vector2(heads[i].getPosition().x, heads[i].getPosition().y + heads[i].getHitbox().height);
+					Vector2 topRight = new Vector2( heads[i].getPosition().x + heads[i].getHitbox().width,  heads[i].getPosition().y + heads[i].getHitbox().height);
+					Vector2 bottomLeft = new Vector2(heads[i].getPosition().x, heads[i].getPosition().y);
+					Vector2 bottomRight = new Vector2(heads[i].getPosition().x  + heads[i].getHitbox().width, heads[i].getPosition().y);
+					debugRenderer.begin(ShapeType.Line);
+					debugRenderer.setColor(Color.RED);
+					debugRenderer.line(topLeft, bottomRight);
+					debugRenderer.line(topRight, bottomLeft);
+					debugRenderer.end();
+				}
+			}
+		}
+		
+		debugString = "false";
+		if(justDragged){
+			for (int i = 0; i < heads.length; i++) {
+				if (heads[i] instanceof FlyingHershal) {
+					
+					Vector2 topLeft = new Vector2(heads[i].getPosition().x, heads[i].getPosition().y + heads[i].getHitbox().height);
+					Vector2 topRight = new Vector2( heads[i].getPosition().x + heads[i].getHitbox().width,  heads[i].getPosition().y + heads[i].getHitbox().height);
+					Vector2 bottomLeft = new Vector2(heads[i].getPosition().x, heads[i].getPosition().y);
+					Vector2 bottomRight = new Vector2(heads[i].getPosition().x  + heads[i].getHitbox().width, heads[i].getPosition().y);
+					if(Intersector.intersectLines(lastClick, lastDragged, bottomLeft, topRight, tempDump1) || Intersector.intersectLines(lastClick, lastDragged, topLeft, bottomRight, tempDump2) ){
+						//heads[i] = null;
+						debugString = "true";
+					}
+					
+				}
+			}
+			if(GameKillCarl2.DEBUG){
+				debugRenderer.setColor(new Color(1, 0, 0, 1));
+				debugRenderer.begin(ShapeType.Line);
+				debugRenderer.line(lastClick, lastDragged);
+				debugRenderer.end();
+				
+			}
+			justDragged = false;
+		}
 
 	}
 
@@ -192,6 +245,10 @@ public class GameScreen implements Screen, InputProcessor {
 	private void renderHeads() {
 		for (int i = 0; i < heads.length; i++) {
 			if (heads[i] != null) {
+				/*if (heads[i] instanceof FlyingHershal) {
+					heads[i].getSprite().setOrigin(50, 50);
+					heads[i].getSprite().rotate(-5);
+				}*/
 				heads[i].render(gkc2.batch);
 			}
 		}
@@ -200,7 +257,9 @@ public class GameScreen implements Screen, InputProcessor {
 	private void initBgMusic() {
 		bgmusic = Gdx.audio.newMusic(Gdx.files.internal("data/bgmusic.ogg"));
 		bgmusic.setLooping(true);
-		bgmusic.play();
+		if(!GameKillCarl2.DEBUG){
+			bgmusic.play();
+		}
 	}
 
 	private void renderBackground() {
@@ -214,7 +273,14 @@ public class GameScreen implements Screen, InputProcessor {
 		for (int i = 0; i < heads.length; i++) {
 			if (heads[i] != null) {
 				if (heads[i].getTyp() == Typen.CARL) {
-					gameOver("You didn't kill all Carls FAGGOT!");
+					/*
+					 * 
+					 * UNCOMMENT AFTER DEBUG
+					 * 
+					 * 
+					 */
+					//gameOver("You didn't kill all Carls FAGGOT!");
+					
 				} else {
 					heads[i] = null;
 				}
@@ -272,7 +338,7 @@ public class GameScreen implements Screen, InputProcessor {
 		float h = Gdx.graphics.getHeight();
 		for (int i = 0; i < heads.length; i++) {
 			if (heads[i] instanceof FlyingHershal) {
-				float x = heads[i].getPosition().x + 5;
+				float x = heads[i].getPosition().x + 2/*1 + 1.5f * timerDelayDespawn*/;
 				heads[i].setPosition(new Vector2(x, (float)(-0.0004 * (Math.pow((x - w/2), 2)  )+ h/1.7)));
 			}
 		}
@@ -300,8 +366,8 @@ public class GameScreen implements Screen, InputProcessor {
 		float h = Gdx.graphics.getHeight();
 		if (button == Buttons.LEFT) {
 			lastClick.set(screenX, h - screenY);
-			debugString = "x: " + String.valueOf(lastClick.x) + "y: "
-					+ String.valueOf(lastClick.y) + " false";
+			/*debugString = "x: " + String.valueOf(lastClick.x) + "y: "
+					+ String.valueOf(lastClick.y) + " false";*/
 			for (int i = 0; i < heads.length; i++) {
 				if (heads[i] != null
 						&& heads[i].getHitbox().contains(screenX, h - screenY)) {
@@ -316,6 +382,9 @@ public class GameScreen implements Screen, InputProcessor {
 					case ZOMBIE:
 						score += 10;
 						break;
+					case HERSHAL:
+						score += 100;
+						break;
 					}
 					clicked = true;
 					if (heads[i] != null) {
@@ -328,10 +397,11 @@ public class GameScreen implements Screen, InputProcessor {
 						}
 					}
 					heads[i] = null;
-					debugString = "x: " + String.valueOf(lastClick.x) + "y: "
-							+ String.valueOf(lastClick.y) + " true";
+					/*debugString = "x: " + String.valueOf(lastClick.x) + "y: "
+							+ String.valueOf(lastClick.y) + " true";*/
 				}
 			}
+			//return true;
 		}
 		return false;
 	}
@@ -344,7 +414,28 @@ public class GameScreen implements Screen, InputProcessor {
 
 	@Override
 	public boolean touchDragged(int screenX, int screenY, int pointer) {
-		// TODO Auto-generated method stub
+		
+		if(lastDragged.dst(new Vector2(screenX, screenY)) >= 200){
+			float h = Gdx.graphics.getHeight();
+			lastDragged.set(screenX, h - screenY);
+			justDragged = true;
+			return true;
+		}
+			
+			
+		
+		/*for (int i = 0; i < heads.length; i++) {
+		if (heads[i] != null) {
+			for (int i1 = 0; i1 < lastHitbox.length; i1++) {
+				if (lastHitbox[i1] == null) {
+					blood[i1] = new Sprite(new Texture(Gdx.files.internal("data/blood.png")));
+					lastHitbox[i1] = heads[i].getHitbox();
+					heads[i].getHitbox().
+					break;
+				}
+			}
+		}*/
+		justDragged = false;
 		return false;
 	}
 

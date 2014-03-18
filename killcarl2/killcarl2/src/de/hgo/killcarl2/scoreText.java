@@ -4,6 +4,7 @@ import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.graphics.Texture;
 import com.badlogic.gdx.graphics.g2d.Sprite;
 
+@Deprecated
 public class scoreText {
 
 	Typen typ;
@@ -27,6 +28,9 @@ public class scoreText {
 				break;
 			case RICK:
 				sprite = new Sprite(new Texture(Gdx.files.internal("data/50.png")));
+				break;
+			default:
+				sprite = new Sprite(new Texture(Gdx.files.internal("data/blood.png")));
 				break;
 			}
 		finished = false;

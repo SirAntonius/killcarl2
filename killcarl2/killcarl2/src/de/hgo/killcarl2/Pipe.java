@@ -4,14 +4,9 @@ import java.util.Random;
 
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.graphics.Texture;
-import com.badlogic.gdx.graphics.Texture.TextureFilter;
-import com.badlogic.gdx.graphics.g2d.Batch;
-import com.badlogic.gdx.graphics.g2d.BitmapFont;
 import com.badlogic.gdx.graphics.g2d.Sprite;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 import com.badlogic.gdx.math.Vector2;
-import com.badlogic.gdx.utils.Timer;
-import com.badlogic.gdx.utils.Timer.Task;
 
 
 
@@ -26,8 +21,6 @@ public class Pipe {
 	
 	
 	private Vector2 position;
-	private BitmapFont font;
-	private Timer timer;
 	private int pipeID;
 	private GameScreen gs;
 
@@ -42,9 +35,7 @@ public class Pipe {
 		this.pipeID = pipeID;
 		this.position = pos;
 		sprite = new Sprite(new Texture(Gdx.files.internal("data/pipe.png")));
-		timer = new Timer();
 		spawnRandomHead();
-		font = new BitmapFont();
 	}
 
 	public void render(SpriteBatch batch) {

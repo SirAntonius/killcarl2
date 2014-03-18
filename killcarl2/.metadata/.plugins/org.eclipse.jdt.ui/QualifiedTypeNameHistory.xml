@@ -4,4 +4,6 @@
 <fullyQualifiedTypeName name="com.badlogic.gdx.graphics.g2d.TextureRegion"/>
 <fullyQualifiedTypeName name="com.badlogic.gdx.graphics.Pixmap"/>
 <fullyQualifiedTypeName name="com.badlogic.gdx.math.Rectangle"/>
+<fullyQualifiedTypeName name="javax.sound.sampled.Line"/>
+<fullyQualifiedTypeName name="com.badlogic.gdx.math.Intersector"/>
 </qualifiedTypeNameHistroy>
