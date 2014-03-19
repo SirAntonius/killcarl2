@@ -1,0 +1,491 @@
+package de.hgo.killcarl2;
+
+import com.badlogic.gdx.Gdx;
+import com.badlogic.gdx.Input.Buttons;
+import com.badlogic.gdx.InputProcessor;
+import com.badlogic.gdx.Screen;
+import com.badlogic.gdx.audio.Music;
+import com.badlogic.gdx.audio.Sound;
+import com.badlogic.gdx.graphics.Color;
+import com.badlogic.gdx.graphics.GL10;
+import com.badlogic.gdx.graphics.Texture;
+import com.badlogic.gdx.graphics.g2d.Animation;
+import com.badlogic.gdx.graphics.g2d.Sprite;
+import com.badlogic.gdx.graphics.g2d.TextureRegion;
+import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
+import com.badlogic.gdx.graphics.glutils.ShapeRenderer.ShapeType;
+import com.badlogic.gdx.math.Intersector;
+import com.badlogic.gdx.math.Rectangle;
+import com.badlogic.gdx.math.Vector2;
+import com.badlogic.gdx.utils.Timer;
+import com.badlogic.gdx.utils.Timer.Task;
+
+public class GameScreen implements Screen, InputProcessor {
+
+	private GameKillCarl2 gkc2;
+
+	private Sprite bg;
+	private Pipe[] pipes;
+	public static final int HEAD_ARRAY_SIZE = 128;
+	public Head[] heads = new Head[HEAD_ARRAY_SIZE];
+	private int numberOfPipes;
+	private Music bgmusic;
+	private String debugString = "";
+	private float difficultyFactor;
+	private float timerDelayDespawn; // in Sekunden
+	private float timerDelayRespawn; // in Sekunden
+	private int score;
+	private int rounds;
+	private Sound sound;
+	private boolean gameOver;
+	private Animation hammer;
+	private float animationTime;
+	private boolean clicked;
+	private final float HAMMER_ANIMATION_TIME = 0.085f;
+	private Vector2 lastClick = new Vector2(0, 0);
+	private Vector2 lastDragged = new Vector2(0, 0);
+	private Sprite[] blood;
+	private Rectangle[] lastHitbox;
+	private ShapeRenderer debugRenderer = new ShapeRenderer();
+	private boolean justDragged;
+	private Vector2 intersection1;
+	private Vector2 intersection2;
+
+	public GameScreen(GameKillCarl2 gkc2) {
+		this.gkc2 = gkc2;
+	}
+
+	@Override
+	public void show() {
+		intersection1 = new Vector2(0, 0);
+		intersection2 = new Vector2(0, 0);
+		justDragged = false;
+		animationTime = 0f;
+		clicked = false;
+		blood = new Sprite[HEAD_ARRAY_SIZE];
+		TextureRegion hammerUp = new TextureRegion(new Texture(
+				Gdx.files.internal("data/hammer.png")));
+		TextureRegion hammerDown = new TextureRegion(new Texture(
+				Gdx.files.internal("data/hammerDown.png")));
+		hammer = new Animation(HAMMER_ANIMATION_TIME, hammerUp, hammerDown,
+				hammerDown);
+		score = 0;
+		rounds = 1;
+		gameOver = false;
+		debugString = "x: " + String.valueOf(lastClick.x) + "y: "
+				+ String.valueOf(lastClick.y) + " true";
+		difficultyFactor = 0.982f;
+		timerDelayDespawn = 4f; // regular at 4f
+		timerDelayRespawn = 0.2f;
+		Gdx.input.setInputProcessor(this);
+		// float w = Gdx.graphics.getWidth();
+		// float h = Gdx.graphics.getHeight();
+		// batch = new SpriteBatch();
+		// font = new BitmapFont();
+		bg = new Sprite(new Texture(Gdx.files.internal("data/background.jpg")));
+		lastHitbox = new Rectangle[HEAD_ARRAY_SIZE];
+		numberOfPipes = 8;
+		pipes = new Pipe[numberOfPipes];
+		createPipes();
+		initBgMusic();
+		sound = Gdx.audio.newSound(Gdx.files.internal("data/carl.ogg"));
+		Timer.schedule(new Task() {
+			@Override
+			public void run() {
+				tickDespawn();
+			}
+		}, timerDelayDespawn);
+
+	}
+
+	@Override
+	public void dispose() {
+		Gdx.input.setInputProcessor(null);
+		bgmusic.dispose();
+		sound.dispose();
+		for (int i = 0; i < heads.length; i++) {
+			heads[i] = null;
+		}
+		for (int i = 0; i < pipes.length; i++) {
+			pipes[i] = null;
+		}
+		Timer.instance().clear();
+	}
+
+	@Override
+	public void render(float delta) {
+		float w = Gdx.graphics.getWidth();
+		float h = Gdx.graphics.getHeight();
+		Gdx.gl.glClearColor(1, 1, 1, 1);
+		Gdx.gl.glClear(GL10.GL_COLOR_BUFFER_BIT);
+		moveHershals();
+		gkc2.batch.begin();
+		renderBackground();
+		renderHeads();
+		renderBlood();
+		renderPipes();
+
+		if (clicked) {
+			animationTime += Gdx.graphics.getDeltaTime();
+			TextureRegion tmpFrame = hammer.getKeyFrame(animationTime, true);
+			gkc2.batch.draw(tmpFrame, lastClick.x - tmpFrame.getRegionWidth(),
+					lastClick.y - tmpFrame.getRegionHeight() / 2);
+			// gkc2.batch.draw(blood, lastHitbox.x, lastHitbox.y);
+			if (animationTime > HAMMER_ANIMATION_TIME) {
+				clicked = false;
+				animationTime = 0;
+			}
+		}
+		gkc2.font.draw(gkc2.batch, "Score: " + score, 0 + 0.05f * w, h - 0.05f
+				* h);
+		gkc2.font.draw(gkc2.batch, "Round: " + rounds, 0 + 0.05f * w, h - 0.05f
+				* h - 1 * (gkc2.font.getCapHeight() + 3));
+		if (GameKillCarl2.DEBUG) {
+			gkc2.font.draw(gkc2.batch, debugString, 0 + 0.05f * w, h - 0.05f
+					* h - 2 * (gkc2.font.getCapHeight() + 3));
+			gkc2.font.draw(gkc2.batch, "lastClick", lastClick.x, lastClick.y);
+			gkc2.font.draw(gkc2.batch, "lastDragg", lastDragged.x,
+					lastDragged.y);
+			gkc2.font.draw(gkc2.batch, "x", intersection1.x, intersection1.y);
+			gkc2.font.draw(gkc2.batch, "x", intersection2.x, intersection2.y);
+		}
+		gkc2.batch.end();
+
+		if (GameKillCarl2.DEBUG) {
+			for (int i = 0; i < heads.length; i++) {
+				if (heads[i] instanceof FlyingHershal) {
+
+					Vector2 topLeft = new Vector2(heads[i].getPosition().x,
+							heads[i].getPosition().y
+									+ heads[i].getHitbox().height);
+					Vector2 topRight = new Vector2(heads[i].getPosition().x
+							+ heads[i].getHitbox().width,
+							heads[i].getPosition().y
+									+ heads[i].getHitbox().height);
+					Vector2 bottomLeft = new Vector2(heads[i].getPosition().x,
+							heads[i].getPosition().y);
+					Vector2 bottomRight = new Vector2(heads[i].getPosition().x
+							+ heads[i].getHitbox().width,
+							heads[i].getPosition().y);
+					debugRenderer.begin(ShapeType.Line);
+					debugRenderer.setColor(Color.RED);
+					debugRenderer.line(topLeft, bottomRight);
+					debugRenderer.line(topRight, bottomLeft);
+					debugRenderer.end();
+				}
+			}
+		}
+
+		debugString = "false";
+		if (justDragged) {
+			for (int i = 0; i < heads.length; i++) {
+				if (heads[i] instanceof FlyingHershal) {
+
+					Vector2 topLeft = new Vector2(heads[i].getPosition().x,
+							heads[i].getPosition().y
+									+ heads[i].getHitbox().height);
+					Vector2 topRight = new Vector2(heads[i].getPosition().x
+							+ heads[i].getHitbox().width,
+							heads[i].getPosition().y
+									+ heads[i].getHitbox().height);
+					Vector2 bottomLeft = new Vector2(heads[i].getPosition().x,
+							heads[i].getPosition().y);
+					Vector2 bottomRight = new Vector2(heads[i].getPosition().x
+							+ heads[i].getHitbox().width,
+							heads[i].getPosition().y);
+					if (Intersector.intersectLines(lastClick, lastDragged,
+							bottomLeft, topRight, intersection1)
+							|| Intersector.intersectLines(lastClick,
+									lastDragged, topLeft, bottomRight,
+									intersection2)) {
+						if (heads[i].getHitbox().contains(intersection1)
+								|| heads[i].getHitbox().contains(intersection2)) {
+							heads[i] = null;
+						}
+					}
+
+				}
+			}
+			if (GameKillCarl2.DEBUG) {
+				debugRenderer.setColor(new Color(1, 0, 0, 1));
+				debugRenderer.begin(ShapeType.Line);
+				debugRenderer.line(lastClick, lastDragged);
+				debugRenderer.end();
+
+			}
+			justDragged = false;
+		}
+
+	}
+
+	private void renderBlood() {
+		/*
+		 * if (clicked) { gkc2.batch.draw(blood, lastHitbox.x, lastHitbox.y); }
+		 */
+		for (int i = 0; i < lastHitbox.length; i++) {
+			if (lastHitbox[i] != null) {
+				gkc2.batch.draw(blood[i], lastHitbox[i].x, lastHitbox[i].y);
+				// break;
+			}
+		}
+	}
+
+	@Override
+	public void resize(int width, int height) {
+
+	}
+
+	@Override
+	public void pause() {
+	}
+
+	@Override
+	public void resume() {
+	}
+
+	private void createPipes() {
+		float w = Gdx.graphics.getWidth();
+		float nextPipe = 0;
+		float pipeSpace = w / numberOfPipes;
+
+		for (int i = 0; i < pipes.length; i++) {
+			if (i == 0) {
+				nextPipe = pipeSpace / 4;
+			} else {
+				nextPipe += pipeSpace / 2;
+			}
+			pipes[i] = new Pipe(new Vector2(nextPipe, 0), i, this);
+			nextPipe += pipeSpace / 2;
+		}
+	}
+
+	private void renderPipes() {
+		for (int i = 0; i < pipes.length; i++) {
+			pipes[i].render(gkc2.batch);
+		}
+	}
+
+	private void renderHeads() {
+		for (int i = 0; i < heads.length; i++) {
+			if (heads[i] != null) {
+				/*
+				 * if (heads[i] instanceof FlyingHershal) {
+				 * heads[i].getSprite().setOrigin(50, 50);
+				 * heads[i].getSprite().rotate(-5); }
+				 */
+				heads[i].render(gkc2.batch);
+			}
+		}
+	}
+
+	private void initBgMusic() {
+		bgmusic = Gdx.audio.newMusic(Gdx.files.internal("data/bgmusic.ogg"));
+		bgmusic.setLooping(true);
+		if (!GameKillCarl2.DEBUG) {
+			bgmusic.play();
+		}
+	}
+
+	private void renderBackground() {
+		float w = Gdx.graphics.getWidth();
+		float h = Gdx.graphics.getHeight();
+		bg.setBounds(0, 0, w, h);
+		gkc2.batch.draw(bg, bg.getX(), bg.getY());
+	}
+
+	private void tickDespawn() {
+		for (int i = 0; i < heads.length; i++) {
+			if (heads[i] != null) {
+				if (heads[i].getTyp() == Typen.CARL) {
+					/*
+					 * 
+					 * UNCOMMENT AFTER DEBUG
+					 */
+					// gameOver("You didn't kill all Carls FAGGOT!");
+
+				} else {
+					heads[i] = null;
+				}
+			}
+		}
+		// new tick respawn
+		if (!gameOver) {
+			Timer.schedule(new Task() {
+				@Override
+				public void run() {
+					tickRespawn();
+				}
+			}, timerDelayRespawn);
+		}
+	}
+
+	private void tickRespawn() {
+		for (int i = 0; i < lastHitbox.length; i++) {
+			lastHitbox[i] = null;
+			blood[i] = null;
+		}
+
+		rounds++;
+		for (int i = 0; i < pipes.length; i++) {
+			pipes[i].spawnRandomHead();
+		}
+
+		timerDelayDespawn *= difficultyFactor;
+
+		if (rounds % 1 == 0) {
+			spawnFlyingHershal();
+		}
+
+		// new tick despawn
+		Timer.schedule(new Task() {
+			@Override
+			public void run() {
+				tickDespawn();
+			}
+		}, timerDelayDespawn);
+	}
+
+	public void spawnFlyingHershal() {
+		float h = Gdx.graphics.getHeight();
+		for (int i = 0; i < GameScreen.HEAD_ARRAY_SIZE; i++) {
+			if (heads[i] == null) {
+				heads[i] = new FlyingHershal(0, h / 2, i, this);
+				break;
+			}
+		}
+	}
+
+	public void moveHershals() {
+		float w = Gdx.graphics.getWidth();
+		float h = Gdx.graphics.getHeight();
+		for (int i = 0; i < heads.length; i++) {
+			if (heads[i] instanceof FlyingHershal) {
+				float x = heads[i].getPosition().x + 2/*
+													 * 1 + 1.5f *
+													 * timerDelayDespawn
+													 */;
+				heads[i].setPosition(new Vector2(x, (float) (-0.0004
+						* (Math.pow((x - w / 2), 2)) + h / 1.7)));
+			}
+		}
+	}
+
+	@Override
+	public boolean keyDown(int keycode) {
+		return false;
+	}
+
+	@Override
+	public boolean keyUp(int keycode) {
+		// TODO Auto-generated method stub
+		return false;
+	}
+
+	@Override
+	public boolean keyTyped(char character) {
+		// TODO Auto-generated method stub
+		return false;
+	}
+
+	@Override
+	public boolean touchDown(int screenX, int screenY, int pointer, int button) {
+		float h = Gdx.graphics.getHeight();
+		boolean delete = false;
+		if (button == Buttons.LEFT) {
+			lastClick.set(screenX, h - screenY);
+			/*
+			 * debugString = "x: " + String.valueOf(lastClick.x) + "y: " +
+			 * String.valueOf(lastClick.y) + " false";
+			 */
+			for (int i = 0; i < heads.length; i++) {
+				if (heads[i] != null
+						&& heads[i].getHitbox().contains(screenX, h - screenY)) {
+					switch (heads[i].getTyp()) {
+					case RICK:
+						gameOver("You Killed Rick STUPID!");
+						break;
+					case CARL:
+						score += 20;
+						sound.play(3.0f);
+						break;
+					case ZOMBIE:
+						score += 10;
+						break;
+					default:
+						break;
+					}
+					clicked = true;
+					if (heads[i] != null) {
+						for (int i1 = 0; i1 < lastHitbox.length; i1++) {
+							if (lastHitbox[i1] == null) {
+								blood[i1] = new Sprite(new Texture(
+										Gdx.files.internal("data/blood.png")));
+								lastHitbox[i1] = heads[i].getHitbox();
+								break;
+							}
+						}
+					}
+					heads[i] = null;
+					/*
+					 * debugString = "x: " + String.valueOf(lastClick.x) + "y: "
+					 * + String.valueOf(lastClick.y) + " true";
+					 */
+				}
+			}
+			// return true;
+		}
+		return false;
+	}
+
+	@Override
+	public boolean touchUp(int screenX, int screenY, int pointer, int button) {
+		// TODO Auto-generated method stub
+		return false;
+	}
+
+	@Override
+	public boolean touchDragged(int screenX, int screenY, int pointer) {
+
+		if (lastDragged.dst(new Vector2(screenX, screenY)) >= 200) {
+			float h = Gdx.graphics.getHeight();
+			lastDragged.set(screenX, h - screenY);
+			justDragged = true;
+			return true;
+		}
+
+		/*
+		 * for (int i = 0; i < heads.length; i++) { if (heads[i] != null) { for
+		 * (int i1 = 0; i1 < lastHitbox.length; i1++) { if (lastHitbox[i1] ==
+		 * null) { blood[i1] = new Sprite(new
+		 * Texture(Gdx.files.internal("data/blood.png"))); lastHitbox[i1] =
+		 * heads[i].getHitbox(); heads[i].getHitbox(). break; } } }
+		 */
+		justDragged = false;
+		return false;
+	}
+
+	@Override
+	public boolean mouseMoved(int screenX, int screenY) {
+		// TODO Auto-generated method stub
+		return false;
+	}
+
+	@Override
+	public boolean scrolled(int amount) {
+		// TODO Auto-generated method stub
+		return false;
+	}
+
+	@Override
+	public void hide() {
+		// TODO Auto-generated method stub
+
+	}
+
+	public void gameOver(String msg) {
+		dispose();
+		gameOver = true;
+		gkc2.setScreen(new GameOverScreen(score, msg, gkc2));
+	}
+
+}

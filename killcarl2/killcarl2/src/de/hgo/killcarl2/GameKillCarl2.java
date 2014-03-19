@@ -10,7 +10,7 @@ public class GameKillCarl2 extends Game {
 	//public MainMenuScreen mainMenuScreen;
 	public SpriteBatch batch;
 	public BitmapFont font;
-	public static boolean DEBUG = true;
+	public static boolean DEBUG = false;
 
 	@Override
 	public void create() {
